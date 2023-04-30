@@ -2,8 +2,12 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "./VestingContract.sol";
 
-contract Token is ERC20 {
+contract Token is ERC20, Initializable {
+    VestingContract public vestingContract;
+
     // The token allocation
     uint256 public constant TOTAL_SUPPLY = 150_000_000 * 10 ** 18;
     uint256 public constant PUBLIC_SALE = 20_000_000 * 10 ** 18;
@@ -62,9 +66,15 @@ contract Token is ERC20 {
     uint256 public end;
 
     /**
-     * @notice The address that will receive the tokens after the sale ends.
+     * @notice The wallets of the project:
+     * [0] = project wallet
+     * [1] = team and adivsors address
+     * [2] = marketing address
+     * [3] = reserve fund address
+     * [4] = development fund address
+     * [5] = community incentives address
      */
-    address payable projectWallet;
+    address[6] wallets;
 
     /**
      * @notice The amount of ETH contributed by each address.
@@ -117,19 +127,65 @@ contract Token is ERC20 {
      * [5] = community incentives address
      */
     constructor(uint256 _start, uint256 _end, address[6] memory _wallets) ERC20("Bolt Token", "BOLT") {
+        vestingContract = new VestingContract(address(this));
         _mint(address(this), TOTAL_SUPPLY);
 
-        _transfer(address(this), _wallets[0], TOKEN_SALE_EXPENSES);
-        _transfer(address(this), _wallets[1], TEAM_ADVISORS);
-        _transfer(address(this), _wallets[2], MARKETING_PARTNERSHIPS - BONUS_TOKENS);
-        _transfer(address(this), _wallets[3], RESERVE);
-        _transfer(address(this), _wallets[4], DEVELOPMENT);
-        _transfer(address(this), _wallets[5], COMMUNITY);
+        // 15% of the sale expenses are unlocked at TGE
+        _transfer(address(this), _wallets[0], TOKEN_SALE_EXPENSES * 15 / 100);
+        // 20% of the marketing and partnerships tokens are unlocked at TGE
+        _transfer(address(this), _wallets[2], (MARKETING_PARTNERSHIPS - BONUS_TOKENS) * 20 / 100);
+        // 25% of the community incentives tokens are unlocked at TGE
+        _transfer(address(this), _wallets[5], COMMUNITY * 25 / 100);
 
         // set up all the variables
         start = _start;
         end = _end;
-        projectWallet = payable(_wallets[0]);
+        wallets = _wallets;
+    }
+
+    /**
+     * @notice Initializes the vesting schedules.
+     */
+    function initializeVesting() external initializer {
+        // 85% of the sale expenses are going to be vested monthly, for 12 months
+        uint256 vestForSaleExpenses = TOKEN_SALE_EXPENSES * 85 / 100;
+        _approve(address(this), address(vestingContract), vestForSaleExpenses);
+        vestingContract.createVestingSchedule(
+            wallets[0], block.timestamp, 12, VestingContract.DurationUnits.Months, vestForSaleExpenses
+        );
+
+        //100%  the team and advisors tokens are going to be vested monthly, for 21 months, starting after 3 months
+        _approve(address(this), address(vestingContract), TEAM_ADVISORS);
+        vestingContract.createVestingSchedule(
+            wallets[1], block.timestamp + 3 * 30 days, 21, VestingContract.DurationUnits.Months, TEAM_ADVISORS
+        );
+
+        // 80% of the marketing and partnerships tokens are going to be vested monthly, for 12 months
+        // the bonus is also given from the marketing and partnerships tokens
+        uint256 vestForMarketing = (MARKETING_PARTNERSHIPS - BONUS_TOKENS) * 80 / 100;
+        _approve(address(this), address(vestingContract), vestForMarketing);
+        vestingContract.createVestingSchedule(
+            wallets[2], block.timestamp + 12 * 30 days, 0, VestingContract.DurationUnits.Months, vestForMarketing
+        );
+
+        // 100% of the reserve tokens are going to be vested monthly, for 12 months
+        _approve(address(this), address(vestingContract), RESERVE);
+        vestingContract.createVestingSchedule(
+            wallets[3], block.timestamp, 12, VestingContract.DurationUnits.Months, RESERVE
+        );
+
+        // 100% of the development tokens are going to be vested monthly, for 12 months
+        _approve(address(this), address(vestingContract), DEVELOPMENT);
+        vestingContract.createVestingSchedule(
+            wallets[4], block.timestamp, 12, VestingContract.DurationUnits.Months, DEVELOPMENT
+        );
+
+        // 75% of the community incentives tokens are going to be vested monthly, for 12 months
+        uint256 vestForCommunity = COMMUNITY * 75 / 100;
+        _approve(address(this), address(vestingContract), vestForCommunity);
+        vestingContract.createVestingSchedule(
+            wallets[5], block.timestamp, 12, VestingContract.DurationUnits.Months, vestForCommunity
+        );
     }
 
     /**
@@ -224,7 +280,7 @@ contract Token is ERC20 {
                 ethToRefund = totalRaised - HARD_CAP;
                 ethForProject = HARD_CAP;
             }
-            (bool sc,) = payable(projectWallet).call{value: ethForProject}("");
+            (bool sc,) = payable(wallets[0]).call{value: ethForProject}("");
             require(sc, "Transfer failed");
         }
 

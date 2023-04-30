@@ -3,12 +3,13 @@ import chai, { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
 import { ethers } from "hardhat";
 
-import { Token } from "../typechain-types";
+import { Token, VestingContract } from "../typechain-types";
 
 chai.use(chaiAsPromised);
 
 describe("Token functions", function () {
     let token: Token;
+    let vesting: VestingContract;
     let deployer: SignerWithAddress;
 
     let teamWallet: SignerWithAddress;
@@ -50,6 +51,9 @@ describe("Token functions", function () {
 
         const TokenFactory = await ethers.getContractFactory("Token");
         token = (await TokenFactory.deploy(startTime, endTime, [deployer.address, teamWallet.address, marketingWallet.address, reserveWallet.address, developmentWallet.address, communityWallet.address])) as Token;
+
+        const VestingFactory = await ethers.getContractFactory("VestingContract");
+        vesting = await ethers.getContractAt("VestingContract", await token.vestingContract());
     });
 
     describe("constructor", function () {
@@ -58,12 +62,38 @@ describe("Token functions", function () {
             expect(await token.start()).to.equal(startTime);
             expect(await token.end()).to.equal(endTime);
 
-            expect(await token.balanceOf(deployer.address)).to.equal(tokenSaleExpenses);
-            expect(await token.balanceOf(teamWallet.address)).to.equal(teamSupply);
-            expect(await token.balanceOf(marketingWallet.address)).to.equal(marketingSupply);
-            expect(await token.balanceOf(reserveWallet.address)).to.equal(reserveSupply);
-            expect(await token.balanceOf(developmentWallet.address)).to.equal(developmentSupply);
-            expect(await token.balanceOf(communityWallet.address)).to.equal(communitySupply);
+            expect(await token.balanceOf(deployer.address)).to.equal(tokenSaleExpenses.mul(15).div(100));
+            expect(await token.balanceOf(marketingWallet.address)).to.equal((marketingSupply.sub(saleBonusSupply)).mul(20).div(100));
+            expect(await token.balanceOf(communityWallet.address)).to.equal(communitySupply.mul(25).div(100));
+        });
+    });
+
+    describe("initializeVesting", function () {
+        it("should not allow to initialize vesting twice", async function () {
+            await token.initializeVesting();
+            await expect(token.initializeVesting()).to.be.revertedWith("Initializable: contract is already initialized");
+        });
+
+        it("should correctly initialize vesting", async function () {
+            await token.initializeVesting();
+
+            const saleExpensesSchedule = await vesting.vestingSchedules(deployer.address, 0);
+            expect(saleExpensesSchedule.amountTotal).to.equal(tokenSaleExpenses.mul(85).div(100));
+
+            const teamSchedule = await vesting.vestingSchedules(teamWallet.address, 0);
+            expect(teamSchedule.amountTotal).to.equal(teamSupply);
+
+            const marketingSchedule = await vesting.vestingSchedules(marketingWallet.address, 0);
+            expect(marketingSchedule.amountTotal).to.equal((marketingSupply.sub(saleBonusSupply)).mul(80).div(100));
+
+            const reserveSchedule = await vesting.vestingSchedules(reserveWallet.address, 0);
+            expect(reserveSchedule.amountTotal).to.equal(reserveSupply);
+
+            const developmentSchedule = await vesting.vestingSchedules(developmentWallet.address, 0);
+            expect(developmentSchedule.amountTotal).to.equal(developmentSupply);
+
+            const communitySchedule = await vesting.vestingSchedules(communityWallet.address, 0);
+            expect(communitySchedule.amountTotal).to.equal(communitySupply.mul(75).div(100));
         });
     });
 
