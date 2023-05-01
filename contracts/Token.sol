@@ -154,10 +154,10 @@ contract Token is ERC20, Initializable {
             wallets[0], block.timestamp, 12, VestingContract.DurationUnits.Months, vestForSaleExpenses
         );
 
-        //100%  the team and advisors tokens are going to be vested monthly, for 21 months, starting after 3 months
+        //100%  the team and advisors tokens are going to be vested monthly, for 24 months, after a 3 month cliff
         _approve(address(this), address(vestingContract), TEAM_ADVISORS);
         vestingContract.createVestingSchedule(
-            wallets[1], block.timestamp + 3 * 30 days, 21, VestingContract.DurationUnits.Months, TEAM_ADVISORS
+            wallets[1], block.timestamp + 3 * 30 days, 24, VestingContract.DurationUnits.Months, TEAM_ADVISORS
         );
 
         // 80% of the marketing and partnerships tokens are going to be vested monthly, for 12 months
@@ -165,7 +165,7 @@ contract Token is ERC20, Initializable {
         uint256 vestForMarketing = (MARKETING_PARTNERSHIPS - BONUS_TOKENS) * 80 / 100;
         _approve(address(this), address(vestingContract), vestForMarketing);
         vestingContract.createVestingSchedule(
-            wallets[2], block.timestamp + 12 * 30 days, 0, VestingContract.DurationUnits.Months, vestForMarketing
+            wallets[2], block.timestamp, 12, VestingContract.DurationUnits.Months, vestForMarketing
         );
 
         // 100% of the reserve tokens are going to be vested monthly, for 12 months
