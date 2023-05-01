@@ -3,9 +3,10 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./VestingContract.sol";
 
-contract Token is ERC20, Initializable {
+contract Token is ERC20, Initializable, Ownable {
     VestingContract public vestingContract;
 
     // The token allocation
@@ -211,7 +212,7 @@ contract Token is ERC20, Initializable {
     /**
      * @notice User can claim their tokens after the sale has ended by calling this function, or the project can send the tokens to the user.
      */
-    function airdrop(address[] calldata _buyers) external {
+    function airdrop(address[] calldata _buyers) external onlyOwner {
         require(saleEnded, "Sale has not ended yet");
 
         for (uint256 i = 0; i < _buyers.length; i++) {
@@ -264,7 +265,7 @@ contract Token is ERC20, Initializable {
      * @notice Ends the sale.
      * @dev If the soft cap has been reached, the liquidity is locked and the tokens are sent to the project wallet.
      */
-    function endSale() external {
+    function endSale() external onlyOwner {
         require(block.timestamp > end, "Sale has not ended yet");
         require(!saleEnded, "Sale has already ended");
 
