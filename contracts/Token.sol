@@ -127,7 +127,7 @@ contract Token is ERC20, Initializable, Ownable {
      * [4] = development fund address
      * [5] = community incentives address
      */
-    constructor(uint256 _start, uint256 _end, address[6] memory _wallets) ERC20("Bolt Token", "BOLT") {
+    constructor(uint256 _start, uint256 _end, address[6] memory _wallets) ERC20("Zksyncpad", "Zksp") {
         vestingContract = new VestingContract(address(this));
         _mint(address(this), TOTAL_SUPPLY);
 
