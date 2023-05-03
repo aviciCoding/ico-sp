@@ -3,10 +3,9 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "./VestingContract.sol";
 
-contract Token is ERC20, Initializable, Ownable {
+contract Token is ERC20, Initializable {
     VestingContract public vestingContract;
 
     // The token allocation
@@ -67,6 +66,11 @@ contract Token is ERC20, Initializable, Ownable {
     uint256 public end;
 
     /**
+     * @notice The start date of the airdrop in unix timestamp.
+     */
+    uint256 public airdropStart;
+
+    /**
      * @notice The wallets of the project:
      * [0] = project wallet
      * [1] = team and adivsors address
@@ -119,6 +123,7 @@ contract Token is ERC20, Initializable, Ownable {
      * @notice Initializes all the variables, mints the total supply and creates the vesting schedules.
      * @param _start The start date of the sale in unix timestamp.
      * @param _end The end date of the sale in unix timestamp.
+     * @param _airdropStart The start date of the airdrop in unix timestamp.
      * @param _wallets The addresses of the project:
      * [0] = project wallet
      * [1] = team and adivsors address
@@ -127,7 +132,9 @@ contract Token is ERC20, Initializable, Ownable {
      * [4] = development fund address
      * [5] = community incentives address
      */
-    constructor(uint256 _start, uint256 _end, address[6] memory _wallets) ERC20("Zksyncpad", "Zksp") {
+    constructor(uint256 _start, uint256 _end, uint256 _airdropStart, address[6] memory _wallets)
+        ERC20("Zksyncpad", "Zksp")
+    {
         vestingContract = new VestingContract(address(this));
         _mint(address(this), TOTAL_SUPPLY);
 
@@ -141,6 +148,7 @@ contract Token is ERC20, Initializable, Ownable {
         // set up all the variables
         start = _start;
         end = _end;
+        airdropStart = _airdropStart;
         wallets = _wallets;
     }
 
@@ -212,8 +220,9 @@ contract Token is ERC20, Initializable, Ownable {
     /**
      * @notice User can claim their tokens after the sale has ended by calling this function, or the project can send the tokens to the user.
      */
-    function airdrop(address[] calldata _buyers) external onlyOwner {
+    function airdrop(address[] calldata _buyers) external {
         require(saleEnded, "Sale has not ended yet");
+        if (softCapReached) require(block.timestamp >= airdropStart, "Airdrop has not started yet");
 
         for (uint256 i = 0; i < _buyers.length; i++) {
             // if the user has no contribution, skip
@@ -265,7 +274,7 @@ contract Token is ERC20, Initializable, Ownable {
      * @notice Ends the sale.
      * @dev If the soft cap has been reached, the liquidity is locked and the tokens are sent to the project wallet.
      */
-    function endSale() external onlyOwner {
+    function endSale() external {
         require(block.timestamp > end, "Sale has not ended yet");
         require(!saleEnded, "Sale has already ended");
 

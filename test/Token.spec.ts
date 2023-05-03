@@ -24,6 +24,7 @@ describe("Token functions", function () {
 
     let startTime: number;
     let endTime: number;
+    let airdropStart: number;
 
     const totalSupply = ethers.utils.parseEther("150000000");
     const tokenSaleExpenses = ethers.utils.parseEther("5000000");
@@ -48,11 +49,11 @@ describe("Token functions", function () {
     beforeEach(async function () {
         startTime = (await ethers.provider.getBlock("latest")).timestamp + 60;
         endTime = startTime + 60 * 60 * 24;
+        airdropStart = endTime + 60 * 60 * 24;
 
         const TokenFactory = await ethers.getContractFactory("Token");
-        token = (await TokenFactory.deploy(startTime, endTime, [deployer.address, teamWallet.address, marketingWallet.address, reserveWallet.address, developmentWallet.address, communityWallet.address])) as Token;
+        token = (await TokenFactory.deploy(startTime, endTime, airdropStart, [deployer.address, teamWallet.address, marketingWallet.address, reserveWallet.address, developmentWallet.address, communityWallet.address])) as Token;
 
-        const VestingFactory = await ethers.getContractFactory("VestingContract");
         vesting = await ethers.getContractAt("VestingContract", await token.vestingContract());
     });
 
@@ -181,13 +182,26 @@ describe("Token functions", function () {
             await expect(token.airdrop([alice.address])).to.be.revertedWith("Sale has not ended yet");
         });
 
+        it("should revert if softcap is reached but airdrop has not started", async function () {
+            await increaseTime(60);
+            for (let i = 0; i < 17; i++) {
+                await token.connect(alice).buy({ value: ethers.utils.parseEther("2") });
+                await token.connect(bob).buy({ value: ethers.utils.parseEther("2") });
+                await token.connect(carol).buy({ value: ethers.utils.parseEther("2") });
+            }
+            await increaseTime(60 * 60 * 24);
+            await token.endSale();
+
+            await expect(token.airdrop([alice.address])).to.be.revertedWith("Airdrop has not started yet");
+        });
+
         it("should correctly airdrop tokens if softcap is not reached", async function () {
             await increaseTime(60);
             await token.connect(alice).buy({ value: ethers.utils.parseEther("2") });
             await token.connect(bob).buy({ value: ethers.utils.parseEther("2") });
             await token.connect(carol).buy({ value: ethers.utils.parseEther("2") });
 
-            await increaseTime(60 * 60 * 24 * 2);
+            await increaseTime(60 * 60 * 24);
             await token.endSale();
 
             await expect(token.airdrop([alice.address, bob.address])).to.changeEtherBalances([alice, bob], [ethers.utils.parseEther("2"), ethers.utils.parseEther("2")]);
@@ -200,8 +214,10 @@ describe("Token functions", function () {
                 await token.connect(bob).buy({ value: ethers.utils.parseEther("2") });
                 await token.connect(carol).buy({ value: ethers.utils.parseEther("2") });
             }
-            await increaseTime(60 * 60 * 24 * 2);
+            await increaseTime(60 * 60 * 24);
             await token.endSale();
+
+            await increaseTime(60 * 60 * 24);
 
             const expectedAirdrop = (totalSaleSupply.add(saleBonusSupply)).div(3);
 
@@ -215,8 +231,10 @@ describe("Token functions", function () {
                 await token.connect(bob).buy({ value: ethers.utils.parseEther("2") });
                 await token.connect(carol).buy({ value: ethers.utils.parseEther("2") });
             }
-            await increaseTime(60 * 60 * 24 * 2);
+            await increaseTime(60 * 60 * 24);
             await token.endSale();
+
+            await increaseTime(60 * 60 * 24);
 
             const expectedAirdrop = (totalSaleSupply.add(saleBonusSupply)).div(3);
 
